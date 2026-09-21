@@ -89,7 +89,7 @@
 <section class="card" style="margin-top:14px"><div class="section-title"><div><h3>メモ</h3><p>その日の弱点・気づきを残せます。</p></div></div><textarea id="dayNote" placeholder="例：権利関係の代理が曖昧。△と×は明日見直す。"></textarea></section>
 
 <section class="card" style="margin-top:14px">
-  <div class="section-title"><div><h3>△・× 復習リスト</h3><p>初期表示は選択日の1・3・7・14日前に記録した復習対象です。○が2回連続すると卒業し、途中で△・×なら連続○はリセットされます。</p></div><div class="badge" id="reviewCount">0問</div></div>
+  <div class="section-title"><div><h3>△・× 復習リスト</h3><p>初期表示は選択日の1・3・7・14日前に記録した復習対象＋前日分で未実施の復習です。前日分は1日だけ繰り越します。○が2回連続すると卒業し、途中で△・×なら連続○はリセットされます。</p></div><div class="badge" id="reviewCount">0問</div></div>
   <div class="review-controls">
     <select id="reviewSchedule" aria-label="復習タイミング"><option value="due">今日の復習（1・3・7・14日後）</option><option value="all">復習対象すべて</option><option value="1">1日後</option><option value="3">3日後</option><option value="7">7日後</option><option value="14">14日後</option></select>
     <select id="reviewFilter" aria-label="理解度フィルター"><option value="tx">△・×すべて</option><option value="t">△のみ</option><option value="x">×のみ</option></select>
@@ -268,17 +268,20 @@ function renderWeakQuestions(date,reassign){const bases=reassign?ensureWeakAssig
 function renderQuestions(date,reassign){isWeakDate(date)?renderWeakQuestions(date,reassign):renderPlanQuestions(date,reassign)}
 
 function renderReview(){
-  const mode=els.reviewSchedule.value,f=els.reviewFilter.value,s=els.reviewSubject.value,from=els.reviewFrom.value,to=els.reviewTo.value,today=clampDate(els.date.value||jpToday());
+  const mode=els.reviewSchedule.value,f=els.reviewFilter.value,s=els.reviewSubject.value,from=els.reviewFrom.value,to=els.reviewTo.value,today=clampDate(els.date.value||jpToday()),yesterday=addDays(today,-1);
   let items=Object.keys(state.reviewCases).map(base=>{
     const t=displayTaskForBase(base),status=reviewStatus(base),dayStartStatus=reviewStatusBeforeDate(base,today),todayMark=reviewMarkOnDate(base,today);
-    if(!t||!status||!dayStartStatus)return{base,t,status,dayStartStatus,todayMark,dueOffset:null,nextDue:null};
+    const yesterdayStartStatus=reviewStatusBeforeDate(base,yesterday),yesterdayMark=reviewMarkOnDate(base,yesterday);
+    if(!t||!status||!dayStartStatus)return{base,t,status,dayStartStatus,todayMark,dueOffset:null,nextDue:null,carryover:false,carryOffset:null};
     const dueOffset=dayStartStatus.active?reviewOffsetOnDate(dayStartStatus.weakDate,today):null;
+    const carryOffset=yesterdayStartStatus&&yesterdayStartStatus.active?reviewOffsetOnDate(yesterdayStartStatus.weakDate,yesterday):null;
+    const carryover=carryOffset!==null&&!yesterdayMark;
     const nextDue=status.active?nextReviewDue(status.weakDate,addDays(today,1)):null;
-    return{base,t,status,dayStartStatus,todayMark,dueOffset,nextDue};
-  }).filter(({t,status,dayStartStatus,todayMark,dueOffset})=>{
+    return{base,t,status,dayStartStatus,todayMark,dueOffset,nextDue,carryover,carryOffset};
+  }).filter(({t,status,dayStartStatus,todayMark,dueOffset,carryover,carryOffset})=>{
     if(!t||!status||!dayStartStatus)return false;
     const wasDueToday=dayStartStatus.active&&dueOffset!==null;
-    const visibleForToday=wasDueToday||!!todayMark;
+    const visibleForToday=wasDueToday||carryover||!!todayMark;
     if(mode==='due'&&!visibleForToday)return false;
     if(mode!=='due'&&!status.active&&!todayMark)return false;
     const filterMark=todayMark||status.weakMark;
@@ -286,16 +289,18 @@ function renderReview(){
     const subOk=s==='all'||t.subject===s;
     const recordDate=dayStartStatus.weakDate;
     const fromOk=!from||recordDate>=from,toOk=!to||recordDate<=to;
-    const timingOk=mode==='all'?true:(mode==='due'?visibleForToday:dueOffset===Number(mode));
+    const timingOffset=dueOffset!==null?dueOffset:carryOffset;
+    const timingOk=mode==='all'?true:(mode==='due'?visibleForToday:timingOffset===Number(mode));
     return markOk&&subOk&&fromOk&&toOk&&timingOk;
   });
-  items.sort((a,b)=>a.t.subject.localeCompare(b.t.subject)||a.t.q-b.t.q);
+  items.sort((a,b)=>Number(b.carryover)-Number(a.carryover)||a.t.subject.localeCompare(b.t.subject)||a.t.q-b.t.q);
   els.reviewCount.textContent=items.length+'問';els.reviewList.innerHTML='';
   if(!items.length){const x=document.createElement('div');x.className='info';x.textContent=mode==='due'?'今日の復習対象はありません。':'対象の問題はありません。';els.reviewList.appendChild(x);return}
-  items.slice(0,160).forEach(({base,t,status,dayStartStatus,todayMark,dueOffset,nextDue})=>{
+  items.slice(0,160).forEach(({base,t,status,dayStartStatus,todayMark,dueOffset,nextDue,carryover,carryOffset})=>{
     const row=document.createElement('div');row.className='review-item';const left=document.createElement('div');left.className='left';const st=document.createElement('strong');st.textContent=t.subjectName+' 問'+t.q;const sm=document.createElement('small');
     let detail='記録日：'+fmtDate(dayStartStatus.weakDate);
-    if(dueOffset!==null)detail+=' ／ '+dueOffset+'日後の復習';
+    if(carryover)detail+=' ／ 前日分 '+carryOffset+'日後の復習';
+    else if(dueOffset!==null)detail+=' ／ '+dueOffset+'日後の復習';
     if(todayMark)detail+=' ／ 今日 '+todayMark+' 済';
     else if(nextDue&&mode!=='due')detail+=' ／ 次回 '+fmtDate(nextDue.date);
     sm.textContent=detail;left.append(st,sm);
