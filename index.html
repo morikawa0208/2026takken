@@ -89,7 +89,7 @@
 <section class="card" style="margin-top:14px"><div class="section-title"><div><h3>メモ</h3><p>その日の弱点・気づきを残せます。</p></div></div><textarea id="dayNote" placeholder="例：権利関係の代理が曖昧。△と×は明日見直す。"></textarea></section>
 
 <section class="card" style="margin-top:14px">
-  <div class="section-title"><div><h3>△・× 復習リスト</h3><p>初期表示は選択日の1・3・7・14日前に記録した復習対象＋前日分で未実施の復習です。前日分は1日だけ繰り越します。1日後・3日後は結果に関係なく継続し、7日後で△・×ならその日から再スタート。14日後は○なら終了、△・×ならその日から再スタートします。</p></div><div class="badge" id="reviewCount">0問</div></div>
+  <div class="section-title"><div><h3>△・× 復習リスト</h3><p>初期表示は選択日の1・3・7・14日前に記録した復習対象と、前日にやり残した復習です。前日のやり残しは「前日未実施：本来○/○（○日後）」と表示し、1日だけ繰り越します。1日後・3日後は結果に関係なく継続し、7日後で△・×ならその日から再スタート。14日後は○なら終了、△・×ならその日から再スタートします。</p></div><div class="badge" id="reviewCount">0問</div></div>
   <div class="review-controls">
     <select id="reviewSchedule" aria-label="復習タイミング"><option value="due">今日の復習（1・3・7・14日後）</option><option value="all">復習対象すべて</option><option value="1">1日後</option><option value="3">3日後</option><option value="7">7日後</option><option value="14">14日後</option></select>
     <select id="reviewFilter" aria-label="理解度フィルター"><option value="tx">△・×すべて</option><option value="t">△のみ</option><option value="x">×のみ</option></select>
@@ -294,7 +294,7 @@ function renderReview(){
   items.slice(0,160).forEach(({base,t,status,dayStartStatus,todayMark,dueOffset,nextDue,carryover,carryOffset})=>{
     const row=document.createElement('div');row.className='review-item';const left=document.createElement('div');left.className='left';const st=document.createElement('strong');st.textContent=t.subjectName+' 問'+t.q;const sm=document.createElement('small');
     let detail='記録日：'+fmtDate(dayStartStatus.weakDate);
-    if(carryover)detail+=' ／ 前日分 '+carryOffset+'日後の復習';
+    if(carryover)detail+=' ／ 前日未実施：本来'+fmtDate(yesterday)+'（'+carryOffset+'日後）';
     else if(dueOffset!==null)detail+=' ／ '+dueOffset+'日後の復習';
     if(todayMark)detail+=' ／ 今日 '+todayMark+' 済';
     else if(nextDue&&mode!=='due')detail+=' ／ 次回 '+fmtDate(nextDue.date);
